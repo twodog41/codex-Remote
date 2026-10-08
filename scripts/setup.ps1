@@ -8,7 +8,8 @@
 $ErrorActionPreference = 'Stop'
 $projectPath = (Resolve-Path -LiteralPath $Project).Path
 if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) { throw 'Project 必须是目录。' }
-$nodeForPaths = Get-Command node.exe -ErrorAction Stop
+. (Join-Path $PSScriptRoot 'runtime.ps1')
+$nodeForPaths = Get-RemoteNode
 $projectPath = & $nodeForPaths.Source -e "process.stdout.write(require('fs').realpathSync.native(process.argv[1]));" $projectPath
 if ($LASTEXITCODE -ne 0 -or -not $projectPath) { throw '无法解析项目的真实目录。' }
 $configRoot = if ($env:REMOTE_CODEX_HOME) { $env:REMOTE_CODEX_HOME } else { Join-Path $env:LOCALAPPDATA 'RemoteCodex' }

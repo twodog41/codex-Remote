@@ -9,6 +9,8 @@ DerivedData/
 
 # Local configuration, credentials and runtime data
 dist/
+runtime/
+*.exe
 .env
 .env.*
 !.env.example

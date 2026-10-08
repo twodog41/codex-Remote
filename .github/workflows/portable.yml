@@ -1,0 +1,22 @@
+name: Build Windows portable package
+on: [workflow_dispatch]
+jobs:
+  portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with bundled Node and dependencies
+        shell: powershell
+        run: ./scripts/package-windows.ps1
+      - name: Verify without Node or npm on PATH
+        shell: powershell
+        run: |
+          $package = Get-ChildItem dist/RemoteCodex-*-windows-x64.zip | Select-Object -First 1
+          ./bridge/test/portable.test.ps1 -Package $package.FullName
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RemoteCodex-windows-x64
+          path: |
+            dist/RemoteCodex-*-windows-x64.zip
+            dist/RemoteCodex-*-windows-x64.zip.sha256
+            dist/RemoteCodex.exe

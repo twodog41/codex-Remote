@@ -1,7 +1,8 @@
 ﻿param([switch]$Weixin, [switch]$LoginOnly)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$node = Get-Command node.exe -ErrorAction Stop
+. (Join-Path $PSScriptRoot 'runtime.ps1')
+$node = Get-RemoteNode
 $codex = if ($env:CODEX_BIN) { $env:CODEX_BIN } else {
     $exe = Get-Command codex.exe -ErrorAction SilentlyContinue
     if ($exe) { $exe.Source } else {

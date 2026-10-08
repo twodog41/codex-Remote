@@ -8,6 +8,8 @@
 
 ## 第一次使用
 
+Windows x64 便携包已自带 Node.js 和二维码依赖：完整解压后双击 `启动微信.cmd`，首次输入项目文件夹路径，再扫码即可；无需安装 Node.js 或 npm。下面的命令行步骤适用于源码版。绑定脚本在便携包中应使用 `runtime/node.exe` 执行。
+
 在 Windows 打开 PowerShell：
 
 ```powershell

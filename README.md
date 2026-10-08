@@ -18,7 +18,17 @@ Remote Codex 将普通微信与 Windows 上的 Codex 连接起来。你可以在
 
 ## 使用前准备
 
-微信模式需要：
+**普通用户推荐：[下载 Windows x64 便携包](https://github.com/twodog41/codex-Remote/releases/latest)。** 选择 `RemoteCodex-0.2.1-windows-x64.zip`，完整解压到固定位置，再双击 **RemoteCodex.exe**（也可用“启动微信.cmd”）。首次输入项目文件夹路径，然后用微信扫码。无需安装 Node.js 或 npm；Codex 仍需安装并登录。
+
+| 下载方式 | 是否需要安装 Node.js | 怎么启动 | 适合谁 |
+| --- | --- | --- | --- |
+| Release 中的 Windows 便携包 ZIP | 不需要，已包含运行环境和依赖 | 完整解压后双击 `RemoteCodex.exe` | 普通 Windows x64 用户 |
+| GitHub “Code → Download ZIP”或克隆的源码 | 需要 Node.js 22+ 和 npm | 按下面的源码教程运行 | 开发者、想修改代码的用户 |
+| Release 中单独的 `RemoteCodex.exe` | 它本身没有内置运行环境 | 放在完整便携包根目录运行 | 单独获取启动器，不是完整软件 |
+
+**不要只下载 exe，也不要在压缩包内直接运行。** exe 是启动器，不是安装包或单文件完整程序；需要旁边的 `runtime`、`scripts`、`bridge` 和 `node_modules` 文件夹。Windows ARM64 尚未提供原生便携包。GitHub 自动生成的 Source code ZIP 也属于源码版。
+
+从源码运行微信模式需要：
 
 1. 一台能正常使用 Codex 的 Windows 电脑，以及已登录的 Codex 桌面 App 或 CLI。
 2. Node.js 22 或更新版本，包含 npm；使用环境代理时，建议选择支持 `--use-env-proxy` 的版本。
@@ -68,6 +78,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```text
 请将 D:\工具\Remote-Codex 中的微信遥控程序绑定到当前对话。
 请使用该项目的 bridge/bind-desktop.mjs 和当前聊天 ID 完成绑定。
+如果使用便携包，请使用该目录的 runtime/node.exe 执行脚本，不依赖系统 node 命令。
 ```
 
 绑定需要从 Codex 内执行，普通 PowerShell 没有桌面 App 提供的连接信息。此功能依赖桌面 App 中可用的 `codex-app-tools` 插件接口；缺少该接口时，可继续使用独立模式。
@@ -179,6 +190,20 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 原生 App 需要 Mac、Xcode 和可用的 Tailscale；当前 Windows 开发环境未完成 iOS 编译及真机验收。微信模式不需要这些条件。接口说明见[协议文档](docs/protocol.md)。
 
 ## 开发与验证
+
+构建 Windows x64 便携包（Windows PowerShell）：
+
+```powershell
+.\scripts\package-windows.ps1
+```
+
+打包脚本下载固定版本的官方 Node.js Windows 运行环境，并校验固定 SHA-256；使用锁文件安装依赖，保留 Node.js 和二维码库的许可文件。结果保存在 `dist/`，附带校验文件。构建需要联网，构建脚本本身无需系统 Node.js；包内不包含 Codex、个人配置、微信凭据、Git 元数据或登录二维码。也可在 GitHub Actions 手动运行 **Build Windows portable package** 下载构建产物。
+
+验证便携包能在没有系统 Node.js/npm 的环境启动：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/portable.test.ps1 -Package 'dist/RemoteCodex-0.2.1-windows-x64.zip'
+```
 
 ```powershell
 npm ci --ignore-scripts
