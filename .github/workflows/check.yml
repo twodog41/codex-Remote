@@ -1,0 +1,19 @@
+name: Check
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  bridge:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: powershell.exe -NoProfile -File bridge/test/start.test.ps1
+      - run: powershell.exe -NoProfile -File bridge/test/safety.test.ps1
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: xcodebuild -project ios/RemoteCodex.xcodeproj -scheme RemoteCodex -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

@@ -1,0 +1,18 @@
+{
+  "name": "remote-codex",
+  "version": "0.2.1",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node bridge/server.mjs",
+    "test": "node --test bridge/test/*.test.mjs",
+    "wechat": "node bridge/weixin.mjs",
+    "smoke": "node bridge/test/real-smoke.mjs"
+  },
+  "dependencies": {
+    "qrcode-terminal": "0.12.0"
+  }
+}
