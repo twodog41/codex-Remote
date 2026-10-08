@@ -38,7 +38,7 @@ export class DesktopBridge {
 
   async start() {
     await this.rpc.request('initialize', { protocolVersion: '2024-11-05', capabilities: {},
-      clientInfo: { name: 'remote-codex-desktop', version: '0.2.1' } });
+      clientInfo: { name: 'remote-codex-desktop', version: '0.2.2' } });
     this.rpc.write({ method: 'notifications/initialized' });
     await this.refresh();
     if (this.pollMs) this.timer = setInterval(() => {
@@ -61,9 +61,10 @@ export class DesktopBridge {
   }
 
   async readSnapshot(threadId, allowBlocked = false) {
-      // Read bounded recent rounds without tool outputs; only relay a stable final answer.
+      // Delegated phone instructions appear as functionCallOutput, not userMessage.
+      // Read their envelope, but never relay arbitrary tool output.
       const result = await this.tool('read_thread', { threadId, turnLimit: 5,
-        includeOutputs: false, maxOutputCharsPerItem: 20000 });
+        includeOutputs: true, maxOutputCharsPerItem: 20000 });
       if (result.thread?.id !== threadId || result.thread.kind !== 'codex') {
         throw new Error('返回的桌面聊天不匹配绑定会话。');
       }
@@ -84,6 +85,12 @@ export class DesktopBridge {
           }
           else if (item.type === 'userMessage') messages.push({ id: item.id, turnId: turn.id, role: 'user',
             text: (item.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') });
+          else if (item.type === 'functionCallOutput' && item.namespace === 'codex_app' && item.name === 'send_message_to_thread' && !item.output?.truncated) {
+            const envelope = /^<codex_delegation>\s*<source_thread_id>[a-f0-9-]{36}<\/source_thread_id>\s*<input>([\s\S]*)<\/input>\s*<\/codex_delegation>$/.exec(item.output?.text ?? '');
+            if (envelope && /^\[微信\]\n\[遥控任务 wx-[a-f0-9]{64}\]\n/.test(envelope[1])) {
+              messages.push({ id: item.id, turnId: turn.id, role: 'user', text: envelope[1] });
+            }
+          }
           else if (['commandExecution', 'fileChange', 'webSearch'].includes(item.type)) {
             activity.push({ id: item.id, label: { commandExecution: '执行命令', fileChange: '修改文件', webSearch: '搜索' }[item.type],
               status: item.status, detail: '' });
@@ -99,7 +106,7 @@ export class DesktopBridge {
         recentTurns: (result.turns ?? []).map(t => ({ id: t.id, status: t.status })),
         threadTitle: result.thread.title || result.thread.preview || threadId,
         status: waiting ? '等待电脑上的审批或回答' : busy ? '桌面 Codex 正在工作' : '桌面会话就绪',
-        messages: messages.slice(-200), activity: activity.slice(-40), revision: this.state.revision + 1 };
+        messages: messages.slice(-200), activity: busy ? activity.slice(-40) : [], revision: this.state.revision + 1 };
   }
 
   async listThreads(groupProjects = true) {

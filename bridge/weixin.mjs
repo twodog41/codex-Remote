@@ -12,7 +12,7 @@ import { assertFresh, assertTarget, assertEnabled, redact, COMMAND_TTL } from '.
 import { readPrivateJSON, savePrivateJSON, assertStandardUser } from './vault.mjs';
 
 export const WEIXIN_BASE = 'https://ilinkai.weixin.qq.com';
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const HELP = '直接发送自然语言，让 Codex 在电脑上执行。\n状态：查看当前进度\n停止：停止任务\n允许 编号 / 拒绝 编号：处理授权\n回答 编号 问题ID 内容：回答问题\n完全访问：申请完整 PC 访问（需要再次确认）\n撤回完全访问：停止并恢复项目权限\n帮助：显示本说明';
 
 export function trustedBase(value = WEIXIN_BASE) {
@@ -44,7 +44,7 @@ export class WeixinAPI {
   }
 
   async call(path, body, { signal, timeout = 15000, metadata = true } = {}) {
-    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '513' };
+    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '514' };
     if (body !== undefined) {
       Object.assign(headers, { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token',
         'X-WECHAT-UIN': Buffer.from(String(randomBytes(4).readUInt32BE())).toString('base64') });
@@ -202,6 +202,7 @@ export class WeixinRemote {
     }
     for (const turn of snapshot.recentTurns ?? (snapshot.latestTurn ? [snapshot.latestTurn] : [])) {
       if (!['completed', 'failed', 'interrupted'].includes(turn.status)) continue;
+      if (bridge.desktop && this.phoneTurn(snapshot, turn.id)) continue;
       const key = snapshot.threadId + ':' + turn.id;
       if (!this.state.finishedTurns.includes(key)) this.state.finishedTurns.push(key);
     }
@@ -394,15 +395,17 @@ export class WeixinRemote {
       if (this.bridge.desktop) {
         const ended = (s.recentTurns ?? (s.latestTurn ? [s.latestTurn] : []))
           .filter(t => ['completed', 'failed', 'interrupted'].includes(t.status) && !this.state.finishedTurns.includes(s.threadId + ':' + t.id));
-        for (const turn of ended) this.state.finishedTurns.push(s.threadId + ':' + turn.id);
-        this.state.finishedTurns = this.state.finishedTurns.slice(-100);
         // Recent turns arrive newest first. During an outage keep the newest complete answer, not a transcript dump.
-        const turn = ended.find(t => this.phoneTurn(s, t.id));
+        const ready = ended.filter(t => !this.phoneTurn(s, t.id) || t.status !== 'completed' ||
+          s.messages.some(m => m.role === 'assistant' && m.turnId === t.id && m.text));
+        const turn = ready.find(t => this.phoneTurn(s, t.id));
         if (turn) {
           const answer = s.messages.filter(m => m.role === 'assistant' && m.turnId === turn.id).map(m => m.text).join('\n\n');
           const marker = { completed: '✅ 本轮回答已结束', failed: '❌ 本轮执行失败', interrupted: '⏹ 本轮已停止' }[turn.status];
           this.enqueue(`Codex [${win32.basename(s.project)}]：\n` + (answer ? answer + '\n\n' : '') + marker, 'result');
         }
+        for (const turn of ready) this.state.finishedTurns.push(s.threadId + ':' + turn.id);
+        this.state.finishedTurns = this.state.finishedTurns.slice(-100);
         const urgent = s.error || /等待/.test(s.status) ? this.status() : '';
         if (urgent && urgent !== this.state.status) this.enqueue(urgent);
         this.state.status = urgent;

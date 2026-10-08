@@ -35,7 +35,8 @@ createInterface({ input: process.stdin }).on('line', line => {
       if (!p.arguments.prompt.startsWith('[微信]\n')) throw Error('WeChat source marker missing');
       const number = ++turnNumber;
       turns.set(target.id, { id: 'new-turn-' + number, status: 'completed', items: [
-        { id: 'new-user-' + number, type: 'userMessage', content: [{ type: 'text', text: p.arguments.prompt }] },
+        { id: 'new-user-' + number, type: 'functionCallOutput', namespace: 'codex_app', name: 'send_message_to_thread',
+          output: { text: '<codex_delegation>\n  <source_thread_id>' + target.id + '</source_thread_id>\n  <input>' + p.arguments.prompt + '</input>\n</codex_delegation>', truncated: false } },
         { id: 'progress-' + number, type: 'agentMessage', phase: 'commentary', text: 'internal working progress' },
         { id: 'new-reply-' + number, type: 'agentMessage', phase: 'final_answer', text: 'desktop reply to ' + p.arguments.prompt }
       ] });

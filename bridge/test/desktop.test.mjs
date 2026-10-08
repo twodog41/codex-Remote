@@ -186,6 +186,41 @@ test('desktop backlog retains the newest completed answer and expires old notifi
   assert.equal(deliveries.length, 1);
 });
 
+test('completion waits for its answer, and a persisted phone task catches up after restart once', async () => {
+  const temp = mkdtempSync(join(tmpdir(), 'remote-codex-desktop-test-'));
+  const stateFile = join(temp, 'state.json');
+  const snapshot = { threadId: 'thread', project: temp, status: '就绪', messages: [], activity: [], approvals: [],
+    recentTurns: [{ id: 'phone', status: 'completed' }] };
+  const task = { id: 'request', threadId: 'thread' };
+  writeFileSync(stateFile, JSON.stringify({ owner: 'owner', botID: 'bot', context: '', phoneTasks: [task], finishedTurns: [],
+    seen: [], outbox: [], sent: {}, notified: [], deliveryVersion: 2, privacyVersion: 1 }));
+  snapshot.messages.push({ id: 'u', turnId: 'phone', role: 'user', text: '[微信]\n[遥控任务 request]\nreport' });
+  const deliveries = [];
+  const options = { bridge: { desktop: true, snapshot: () => snapshot },
+    api: { send: async (owner, context, text) => deliveries.push(text) }, stateFile,
+    credentials: { owner: 'owner', botID: 'bot', token: 'test' } };
+  try {
+    let remote = new WeixinRemote(options);
+    remote.state.context = 'test';
+    remote.collect();
+    assert.ok(!remote.state.finishedTurns.includes('thread:phone'));
+    assert.equal(remote.state.outbox.length, 0);
+    snapshot.messages.push({ id: 'a', turnId: 'phone', role: 'assistant', text: 'the delayed answer' });
+    remote = new WeixinRemote(options);
+    remote.state.context = 'test';
+    remote.collect(); await remote.drain();
+    assert.equal(deliveries.length, 1);
+    assert.match(deliveries[0], /the delayed answer/);
+    remote = new WeixinRemote(options);
+    remote.collect(); await remote.drain();
+    assert.equal(deliveries.length, 1);
+  } finally {
+    assert.ok(resolve(temp).startsWith(resolve(tmpdir()) + '\\') || resolve(temp).startsWith(resolve(tmpdir()) + '/'));
+    assert.match(temp, /remote-codex-desktop-test-/);
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('late old-thread polls and failures cannot overwrite a switched route, including switching back', async () => {
   const temp = mkdtempSync(join(tmpdir(), 'remote-codex-desktop-test-'));
   const firstProject = join(temp, 'first'), secondProject = join(temp, 'second');

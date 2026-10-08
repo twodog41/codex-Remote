@@ -4,7 +4,7 @@
 
 Remote Codex 将普通微信与 Windows 上的 Codex 连接起来。你可以在手机上发送任务、查看回复、切换项目，也可以把指令送进已有的 Codex 桌面聊天，沿用原来的上下文。代码、终端、Git 和测试都在电脑上执行，不需要把项目同步到手机。
 
-> 当前版本：0.2.1。第三方社区项目，与 OpenAI、腾讯及微信无隶属关系。
+> 当前版本：0.2.2。第三方社区项目，与 OpenAI、腾讯及微信无隶属关系。
 
 ## 项目特色
 
@@ -18,7 +18,7 @@ Remote Codex 将普通微信与 Windows 上的 Codex 连接起来。你可以在
 
 ## 使用前准备
 
-**普通用户推荐：[下载 Windows x64 便携包](https://github.com/twodog41/codex-Remote/releases/latest)。** 选择 `RemoteCodex-0.2.1-windows-x64.zip`，完整解压到固定位置，再双击 **RemoteCodex.exe**（也可用“启动微信.cmd”）。首次输入项目文件夹路径，然后用微信扫码。无需安装 Node.js 或 npm；Codex 仍需安装并登录。
+**普通用户推荐：[下载 Windows x64 便携包](https://github.com/twodog41/codex-Remote/releases/latest)。** 选择 `RemoteCodex-0.2.2-windows-x64.zip`，完整解压到固定位置，再双击 **RemoteCodex.exe**（也可用“启动微信.cmd”）。首次输入项目文件夹路径，然后用微信扫码。无需安装 Node.js 或 npm；Codex 仍需安装并登录。
 
 | 下载方式 | 是否需要安装 Node.js | 怎么启动 | 适合谁 |
 | --- | --- | --- | --- |
@@ -202,7 +202,7 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 验证便携包能在没有系统 Node.js/npm 的环境启动：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/portable.test.ps1 -Package 'dist/RemoteCodex-0.2.1-windows-x64.zip'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/portable.test.ps1 -Package 'dist/RemoteCodex-0.2.2-windows-x64.zip'
 ```
 
 ```powershell
@@ -212,7 +212,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/safety.test.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/start.test.ps1
 ```
 
-当前记录为 21 项 Node 自动测试通过，另有 Windows PowerShell 配置与启动测试。自动测试使用协议替身，不代表所有微信账号、Codex 版本或 iOS 设备都已验证。真实 Codex 冒烟测试可运行 `npm run smoke`，会使用正常模型额度。详细结果见[验证记录](VALIDATION.md)，第三方材料见[来源与声明](THIRD_PARTY_NOTICES.md)。
+当前记录为 22 项 Node 自动测试通过，另有 Windows PowerShell 配置与启动测试。自动测试使用协议替身，不代表所有微信账号、Codex 版本或 iOS 设备都已验证。真实 Codex 冒烟测试可运行 `npm run smoke`，会使用正常模型额度。详细结果见[验证记录](VALIDATION.md)，第三方材料见[来源与声明](THIRD_PARTY_NOTICES.md)。
 
 ## 支持开发
 

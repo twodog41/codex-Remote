@@ -74,7 +74,7 @@ test('Tencent wire format, big IDs, trusted hosts, local QR and fail-closed logi
     assert.equal(rawBody.msg.message_type, 2);
     assert.equal(rawBody.msg.message_state, 2);
     assert.equal(rawBody.msg.item_list[0].text_item.text, '你好');
-    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.1');
+    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.2');
     await assert.rejects(authenticated.send('owner', '', 'text', 'id'), /上下文/);
     const expired = new WeixinAPI({ fetcher: async () => json({ ret: -14, errmsg: 'secret should never be printed' }) });
     await assert.rejects(expired.updates('cursor'), error => error.code === -14 && !error.message.includes('secret'));
