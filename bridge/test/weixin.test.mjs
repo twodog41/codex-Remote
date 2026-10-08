@@ -18,6 +18,48 @@ function clean(temp) {
   rmSync(path, { recursive: true, force: true });
 }
 
+test('unsupported project switching and transient network failures do not terminate the independent receiver', async () => {
+  const controller = new AbortController();
+  const actions = [], deliveries = [], reports = [];
+  let polls = 0;
+  const snapshot = { threadId: 'thread', project: 'project', access: 'workspace', status: '就绪',
+    messages: [], activity: [], approvals: [], busy: false };
+  const bridge = { snapshot: () => snapshot, action: async (path, body) => {
+    actions.push({ path, text: body.text }); controller.abort();
+  } };
+  const input = (id, text) => ({ create_time_ms: Date.now(), message_id: id, message_type: 1, from_user_id: 'owner',
+    to_user_id: 'bot', context_token: 'context', item_list: [{ type: 1, text_item: { text } }] });
+  const api = { call: async () => ({}), send: async (owner, context, text) => deliveries.push(text),
+    updates: async () => {
+      polls++;
+      if (polls === 1) return { msgs: [input('1', '切换项目')] };
+      if (polls === 2) throw Object.assign(new Error('temporary network reset'), { code: 'ECONNRESET' });
+      return { msgs: [input('2', '只回复“测试”，不要添加其他文字。')] };
+    } };
+  const remote = new WeixinRemote({ bridge, api, credentials: { owner: 'owner', botID: 'bot', token: 'test' } });
+  const watchdog = setTimeout(() => controller.abort(), 4000);
+  try {
+    await remote.run(controller.signal, message => reports.push(message));
+    assert.deepEqual(actions, [{ path: '/message', text: '只回复“测试”，不要添加其他文字。' }]);
+    assert.ok(deliveries.some(text => text.includes('当前是独立模式') && text.includes('微信连接保持运行')));
+    assert.equal(reports.length, 2);
+    assert.match(reports[0], /自动重试/);
+    assert.match(reports[1], /已恢复/);
+    assert.equal(polls, 3);
+  } finally { clearTimeout(watchdog); }
+});
+
+test('expired WeChat authentication is distinguished from retryable disconnections in diagnostics', async () => {
+  const events = [];
+  const bridge = { snapshot: () => ({ threadId: 'thread', messages: [], recentTurns: [] }) };
+  const api = { call: async () => ({}), updates: async () => { throw Object.assign(new Error('login expired'), { code: -14 }); } };
+  const remote = new WeixinRemote({ bridge, api, credentials: { owner: 'owner', botID: 'bot', token: 'test' },
+    diagnostic: (event, fields) => events.push({ event, ...fields }) });
+  await assert.rejects(remote.run(new AbortController().signal, () => {}), error => error.code === -14);
+  assert.ok(events.some(e => e.event === 'receiver.login_expired' && e.code === -14));
+  assert.equal(events.at(-1).event, 'receiver.stopped');
+});
+
 test('Tencent wire format, big IDs, trusted hosts, local QR and fail-closed login', async () => {
   assert.equal(parseApiJSON('{"message_id":18446744073709551615}').message_id, '18446744073709551615');
   for (const value of ['http://ilinkai.weixin.qq.com', 'https://weixin.qq.com.evil.example',
@@ -78,7 +120,7 @@ test('Tencent wire format, big IDs, trusted hosts, local QR and fail-closed logi
     assert.equal(rawBody.msg.message_type, 2);
     assert.equal(rawBody.msg.message_state, 2);
     assert.equal(rawBody.msg.item_list[0].text_item.text, '你好');
-    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.3');
+    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.4');
     await assert.rejects(authenticated.send('owner', '', 'text', 'id'), /上下文/);
     const expired = new WeixinAPI({ fetcher: async () => json({ ret: -14, errmsg: 'secret should never be printed' }) });
     await assert.rejects(expired.updates('cursor'), error => error.code === -14 && !error.message.includes('secret'));

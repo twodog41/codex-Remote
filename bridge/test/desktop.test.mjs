@@ -8,6 +8,43 @@ import { AppServer } from '../server.mjs';
 import { DesktopBridge } from '../desktop.mjs';
 import { WeixinRemote } from '../weixin.mjs';
 
+test('external referenced files do not change the chat working directory; a failed switch retains its target', async () => {
+  const temp = mkdtempSync(join(tmpdir(), 'remote-codex-desktop-test-'));
+  const other = join(temp, 'other-project'); mkdirSync(other);
+  const first = '00000000-0000-7000-8000-000000000001';
+  const second = '00000000-0000-7000-8000-000000000002';
+  const wrap = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
+  const threads = [{ id: first, cwd: temp, title: 'A', kind: 'codex', hostId: 'local' }];
+  const calls = [];
+  const rpc = { write() {}, close: async () => {}, request: async (method, params) => {
+    if (method === 'initialize') return {};
+    const { name, arguments: args } = params;
+    if (name === 'list_threads') return wrap({ threads });
+    if (name === 'send_message_to_thread') { calls.push(args.threadId); return wrap({ threadId: args.threadId }); }
+    if (args.threadId === second) throw new Error('desktop connection temporarily unavailable');
+    return wrap({ thread: { ...threads[0], status: { type: 'idle' } }, turns: [{ id: 'old', status: 'completed',
+      items: [{ id: 'u', type: 'userMessage', content: [{ type: 'text', text: 'Manage ' + join(other, 'file.txt') },
+        { type: 'localImage', path: join(other, 'image.png') }] }] }] });
+  } };
+  const bridge = new DesktopBridge({ threadId: first, rpc, pollMs: 0, allowedProjects: [temp, other] });
+  try {
+    await bridge.start();
+    assert.equal(bridge.snapshot().project, temp);
+    assert.equal((await bridge.listThreads()).length, 1);
+    await assert.rejects(bridge.switchThread(second), /temporarily unavailable/);
+    assert.equal(bridge.snapshot().threadId, first);
+    assert.equal(bridge.snapshot().online, true);
+    assert.equal(bridge.switching, false);
+    await bridge.action('/message', { text: 'continue' });
+    assert.deepEqual(calls, [first]);
+  } finally {
+    await bridge.close();
+    assert.ok(resolve(temp).startsWith(resolve(tmpdir()) + '\\') || resolve(temp).startsWith(resolve(tmpdir()) + '/'));
+    assert.match(temp, /remote-codex-desktop-test-/);
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('an unapproved startup target keeps WeChat switching available without relaying or executing tasks', async () => {
   const temp = mkdtempSync(join(tmpdir(), 'remote-codex-desktop-test-'));
   const first = '00000000-0000-7000-8000-000000000001';

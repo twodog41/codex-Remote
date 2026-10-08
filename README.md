@@ -4,7 +4,7 @@
 
 Remote Codex 将普通微信与 Windows 上的 Codex 连接起来。你可以在手机上发送任务、查看回复、切换项目，也可以把指令送进已有的 Codex 桌面聊天，沿用原来的上下文。代码、终端、Git 和测试都在电脑上执行，不需要把项目同步到手机。
 
-> 当前版本：0.2.3。第三方社区项目，与 OpenAI、腾讯及微信无隶属关系。
+> 当前版本：0.2.4。第三方社区项目，与 OpenAI、腾讯及微信无隶属关系。
 
 ## 项目特色
 
@@ -18,7 +18,7 @@ Remote Codex 将普通微信与 Windows 上的 Codex 连接起来。你可以在
 
 ## 使用前准备
 
-**普通用户推荐：[下载 Windows x64 便携包](https://github.com/twodog41/codex-Remote/releases/latest)。** 选择 `RemoteCodex-0.2.3-windows-x64.zip`，完整解压到固定位置，再双击 **RemoteCodex.exe**（也可用“启动微信.cmd”）。首次输入项目文件夹路径，然后用微信扫码。无需安装 Node.js 或 npm；Codex 仍需安装并登录。
+**普通用户推荐：[下载 Windows x64 便携包](https://github.com/twodog41/codex-Remote/releases/latest)。** 选择 `RemoteCodex-0.2.4-windows-x64.zip`，完整解压到固定位置，再双击 **RemoteCodex.exe**（也可用“启动微信.cmd”）。首次输入项目文件夹路径，然后用微信扫码。无需安装 Node.js 或 npm；Codex 仍需安装并登录。
 
 | 下载方式 | 是否需要安装 Node.js | 怎么启动 | 适合谁 |
 | --- | --- | --- | --- |
@@ -112,6 +112,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## 可选：启用项目白名单
 
+### 跨目录文件与切换目标
+
+遥控器按聊天的工作目录和聊天 ID 选择目标，不按聊天中引用的文件位置选择。比如 A 项目的聊天引用了 B 目录的文件，切换时仍选择 A 的那条聊天；B 不会仅因为被引用就成为列表中的另一个项目。“会话列表”可以选择同一工作目录下的其他聊天。
+
+默认独立模式创建自己的会话，不会自动继承原桌面聊天的历史和附件。要继续原聊天中的跨目录工作，先完成“绑定已有的 Codex 聊天”。桌面模式沿用原聊天的权限；白名单不是所有文件读写范围的隔离措施。跨目录修改是否需要批准，由 Codex 的权限设置决定。
+
 白名单默认关闭；只想方便地使用所有本地项目，可以一直保持关闭。只有扫码绑定的微信账号能够遥控，这一身份限制不受白名单开关影响。
 
 想限制可遥控的项目时，在微信发送 **开启白名单**。开关立即生效，重启后保留。初始批准名单只包含首次设置的项目，新增项目需在电脑的本软件目录执行：
@@ -187,6 +193,10 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 
 入口需要持续运行，当前不提供后台服务、开机自启或推送通知。重新双击 **启动微信.cmd**，并检查电脑是否休眠或断网。
 
+**发送“切换项目”后提示错误或像是断线？**
+
+先看启动信息是“独立模式”还是“已连接现有桌面聊天”。独立模式不支持切换现有项目，但拒绝该命令不会停止微信接收。网络异常会提示自动重试，恢复后提示继续运行；登录失效则明确要求重新扫码。双击 **查看运行记录.cmd** 可查看最近事件，记录不包含指令正文、文件路径、账号、凭据或原始错误详情。日志在本机配置目录轮换保存，不自动上传。
+
 ## 可选：原生 iOS 客户端
 
 仓库保留 SwiftUI iOS 客户端，通过 Tailscale 私网 HTTPS 连接 Windows 上的 `codex app-server` 桥接程序。该模式管理独立会话；无需把 Windows 项目复制到手机。
@@ -210,7 +220,7 @@ $env:HTTPS_PROXY = 'http://127.0.0.1:7890'
 验证便携包能在没有系统 Node.js/npm 的环境启动：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/portable.test.ps1 -Package 'dist/RemoteCodex-0.2.3-windows-x64.zip'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/portable.test.ps1 -Package 'dist/RemoteCodex-0.2.4-windows-x64.zip'
 ```
 
 ```powershell
@@ -220,7 +230,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/safety.test.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File bridge/test/start.test.ps1
 ```
 
-当前记录为 22 项 Node 自动测试通过，另有 Windows PowerShell 配置与启动测试。自动测试使用协议替身，不代表所有微信账号、Codex 版本或 iOS 设备都已验证。真实 Codex 冒烟测试可运行 `npm run smoke`，会使用正常模型额度。详细结果见[验证记录](VALIDATION.md)，第三方材料见[来源与声明](THIRD_PARTY_NOTICES.md)。
+当前记录为 26 项 Node 自动测试通过，另有 Windows PowerShell 配置与启动测试。自动测试使用协议替身，不代表所有微信账号、Codex 版本或 iOS 设备都已验证。真实 Codex 冒烟测试可运行 `npm run smoke`，会使用正常模型额度。详细结果见[验证记录](VALIDATION.md)，第三方材料见[来源与声明](THIRD_PARTY_NOTICES.md)。
 
 ## 支持开发
 

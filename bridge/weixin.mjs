@@ -10,9 +10,10 @@ import { DesktopBridge } from './desktop.mjs';
 import { downloadImage, cleanImages } from './images.mjs';
 import { assertFresh, assertTarget, assertEnabled, redact, COMMAND_TTL } from './safety.mjs';
 import { readPrivateJSON, savePrivateJSON, assertStandardUser } from './vault.mjs';
+import { createDiagnostics } from './diagnostics.mjs';
 
 export const WEIXIN_BASE = 'https://ilinkai.weixin.qq.com';
-const VERSION = '0.2.3';
+const VERSION = '0.2.4';
 const HELP = '直接发送自然语言，让 Codex 在电脑上执行。\n状态：查看当前进度\n停止：停止任务\n允许 编号 / 拒绝 编号：处理授权\n回答 编号 问题ID 内容：回答问题\n完全访问：申请完整 PC 访问（需要再次确认）\n撤回完全访问：停止并恢复项目权限\n帮助：显示本说明';
 
 export function trustedBase(value = WEIXIN_BASE) {
@@ -44,7 +45,7 @@ export class WeixinAPI {
   }
 
   async call(path, body, { signal, timeout = 15000, metadata = true } = {}) {
-    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '515' };
+    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '516' };
     if (body !== undefined) {
       Object.assign(headers, { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token',
         'X-WECHAT-UIN': Buffer.from(String(randomBytes(4).readUInt32BE())).toString('base64') });
@@ -62,7 +63,7 @@ export class WeixinAPI {
       if (error.name === 'TimeoutError' || error.name === 'AbortError' || signal?.aborted) throw error;
       const code = error.cause?.code ?? error.code;
       const detail = typeof code === 'string' && /^[A-Z0-9_]{1,60}$/.test(code) ? `（${code}）` : '';
-      throw new Error(`微信网络连接失败${detail}。若代理连接失败而直连正常，可运行 scripts/wechat.ps1 -WeixinDirect 保存微信直连设置。`);
+      throw Object.assign(new Error(`微信网络连接失败${detail}。若代理连接失败而直连正常，可运行 scripts/wechat.ps1 -WeixinDirect 保存微信直连设置。`), { code: detail ? code : 'NETWORK_ERROR' });
     }
     if (!response.ok) throw Object.assign(new Error(`微信接口返回 HTTP ${response.status}。`), { code: response.status });
     const result = parseApiJSON(await response.text());
@@ -164,7 +165,7 @@ export async function login({ credentialFile, showQR, askCode, api = new WeixinA
 }
 
 export class WeixinRemote {
-  constructor({ bridge, api, credentials, stateFile, now = Date.now, imageDirectory, imageFetcher, disabledFile }) {
+  constructor({ bridge, api, credentials, stateFile, now = Date.now, imageDirectory, imageFetcher, disabledFile, diagnostic = () => {} }) {
     if (!credentials.owner || !credentials.botID || !credentials.token) throw new Error('缺少微信扫码绑定身份。');
     this.bridge = bridge;
     this.api = api;
@@ -172,6 +173,7 @@ export class WeixinRemote {
     this.botID = credentials.botID;
     this.stateFile = stateFile;
     this.now = now;
+    this.record = (event, code) => diagnostic(event, { mode: bridge.desktop ? 'desktop' : 'independent', code });
     this.imageDirectory = imageDirectory;
     this.imageFetcher = imageFetcher;
     this.disabledFile = disabledFile;
@@ -290,7 +292,7 @@ export class WeixinRemote {
         this.enqueue(text === '开启白名单' ? '项目白名单已开启，只能使用电脑批准的项目。若当前项目未批准，可发送“切换项目”返回。' : '项目白名单已关闭，可以选择所有本地项目；只有绑定的微信账号能遥控。');
       }
       else if (['切换项目', '项目列表', '项目', '会话列表'].includes(text)) {
-        if (!this.bridge.desktop) throw new Error('请先连接桌面模式，才能在微信切换现有项目。');
+        if (!this.bridge.desktop) throw Object.assign(new Error('当前是独立模式，微信连接保持运行。切换项目需要先绑定电脑上的现有 Codex 聊天；请在目标聊天中让 Codex 将本软件绑定到当前对话。'), { code: 'DESKTOP_BIND_REQUIRED' });
         const items = await this.bridge.listThreads(text !== '会话列表');
         if (!items.length) throw new Error('没有可切换的本地 Codex 对话，请先在电脑中打开项目聊天。');
         this.threadMenu = { items, expires: this.now() + 300000 };
@@ -305,7 +307,9 @@ export class WeixinRemote {
         const index = Number(text.replace(/^(切换|选择)\s*/, '')) - 1;
         const choice = this.threadMenu.items[index];
         if (!choice) throw new Error('编号不在列表中，请使用显示的编号。');
+        this.record('switch.requested');
         await this.bridge.switchThread(choice.id);
+        this.record('switch.completed');
         this.routingSince = this.now();
         this.threadMenu = null;
         this.challenge = null;
@@ -381,9 +385,10 @@ export class WeixinRemote {
         this.state.phoneTasks = this.state.phoneTasks.slice(-512);
         this.save();
         await this.bridge.action('/message', { id: clientID, requestId: clientID, text, expectedThreadId: targetThreadId, sentAt: message.create_time_ms });
+        this.record('command.accepted');
         this.enqueue('已交给电脑上的 Codex。');
       }
-    } catch (error) { this.enqueue('操作未完成：' + error.message); }
+    } catch (error) { this.record('command.failed', error.code); this.enqueue('操作未完成：' + error.message); }
     this.collect();
     return true;
   }
@@ -482,6 +487,7 @@ export class WeixinRemote {
         this.save();
       }
     } catch (error) {
+      this.record('send.failed', error.code);
       if (error.code === -2 && this.state.context === context && this.state.seen.at(-1) === receipt) {
         this.state.sendBlocked = true;
         this.save();
@@ -501,6 +507,8 @@ export class WeixinRemote {
 
   async run(signal, report = console.error) {
     let delay = 1000;
+    let recovering = false;
+    this.record('receiver.started');
     let lastError = '', lastErrorAt = 0;
     const reportError = error => {
       const message = error.message;
@@ -523,6 +531,11 @@ export class WeixinRemote {
       while (!signal.aborted) {
         try {
           const result = await this.api.updates(this.state.cursor, signal);
+          if (recovering) {
+            this.record('receiver.recovered');
+            report('微信接收已恢复，遥控继续运行。');
+            recovering = false;
+          }
           for (const message of result.msgs ?? []) await this.receive(message);
           if (result.get_updates_buf) this.state.cursor = result.get_updates_buf;
           this.save();
@@ -532,14 +545,19 @@ export class WeixinRemote {
           if (!(result.msgs?.length)) await sleep(300, undefined, { signal });
         } catch (error) {
           if (signal.aborted) break;
-          if (error.code === -14) throw error;
+          this.record('receiver.failed', error.code);
+          if (error.code === -14) { this.record('receiver.login_expired', error.code); throw error; }
           // A long poll with no incoming messages may legitimately time out.
-          if (error.name !== 'TimeoutError') reportError(error);
+          if (error.name !== 'TimeoutError') {
+            recovering = true;
+            reportError(new Error('微信接收暂时异常，程序仍在运行，将自动重试：' + error.message));
+          }
           await sleep(delay, undefined, { signal });
           delay = Math.min(delay * 2, 15000);
         }
       }
     } finally {
+      this.record('receiver.stopped');
       clearInterval(interval);
       clearInterval(cleanup);
       await this.api.call('msg/notifystop', {}).catch(() => {});
@@ -583,13 +601,18 @@ async function main() {
     bridge = config.desktop ? new DesktopBridge({ ...config.desktop, project: config.project, configFile: config.configFile, allowedProjects: config.allowedProjects, allowlistEnabled: config.allowlistEnabled })
       : new Bridge({ ...config, rpc: new AppServer(config.command, undefined, config.project) });
     await bridge.start();
-    const remote = new WeixinRemote({ bridge, api, credentials, stateFile: join(root, 'weixin-state.json'), imageDirectory: join(root, 'images'), disabledFile });
+    const remote = new WeixinRemote({ bridge, api, credentials, stateFile: join(root, 'weixin-state.json'), imageDirectory: join(root, 'images'), disabledFile,
+      diagnostic: createDiagnostics(join(root, 'diagnostics.log')) });
     console.log('微信遥控已启动：' + bridge.snapshot().project +
-      (bridge.desktop ? (bridge.snapshot().blocked ? '\n' + bridge.snapshot().error : '\n已连接现有桌面聊天：' + bridge.snapshot().threadTitle) : '\n使用独立 Codex 会话。') +
+      (bridge.desktop ? (bridge.snapshot().blocked ? '\n' + bridge.snapshot().error : '\n已连接现有桌面聊天：' + bridge.snapshot().threadTitle) : '\n当前为独立模式：新会话不继承桌面聊天；切换项目需要先绑定现有桌面聊天。') +
       '\n在微信助手聊天窗口发送“帮助”开始使用。保持电脑和此窗口运行。');
     await remote.run(controller.signal);
   } catch (error) {
-    if (!controller.signal.aborted) { console.error(error.message); process.exitCode = 1; }
+    if (!controller.signal.aborted) {
+      console.error(error.message);
+      if (error.code === -14) console.error('微信登录已失效，需要重新扫码：运行 .\\scripts\\wechat.ps1 -LoginOnly，然后重新启动入口。');
+      process.exitCode = 1;
+    }
   } finally {
     controller.abort();
     if (bridge) await bridge.close();

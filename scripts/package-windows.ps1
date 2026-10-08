@@ -26,7 +26,7 @@ try {
     foreach ($directory in @('bridge', 'scripts', 'docs', 'ios')) {
         Copy-Item -LiteralPath (Join-Path $repoRoot $directory) -Destination $stage -Recurse
     }
-    foreach ($file in @('README.md', 'VALIDATION.md', 'THIRD_PARTY_NOTICES.md', 'package.json', 'package-lock.json', '启动微信.cmd', '紧急停用遥控.cmd', '紧急停止Codex.cmd', '支持开发.jpg')) {
+    foreach ($file in @('README.md', 'VALIDATION.md', 'THIRD_PARTY_NOTICES.md', 'package.json', 'package-lock.json', '启动微信.cmd', '紧急停用遥控.cmd', '紧急停止Codex.cmd', '查看运行记录.cmd', '支持开发.jpg')) {
         Copy-Item -LiteralPath (Join-Path $repoRoot $file) -Destination $stage
     }
     New-Item -ItemType Directory -Path (Join-Path $stage 'runtime') | Out-Null
