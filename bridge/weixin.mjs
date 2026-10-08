@@ -12,7 +12,7 @@ import { assertFresh, assertTarget, assertEnabled, redact, COMMAND_TTL } from '.
 import { readPrivateJSON, savePrivateJSON, assertStandardUser } from './vault.mjs';
 
 export const WEIXIN_BASE = 'https://ilinkai.weixin.qq.com';
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 const HELP = '直接发送自然语言，让 Codex 在电脑上执行。\n状态：查看当前进度\n停止：停止任务\n允许 编号 / 拒绝 编号：处理授权\n回答 编号 问题ID 内容：回答问题\n完全访问：申请完整 PC 访问（需要再次确认）\n撤回完全访问：停止并恢复项目权限\n帮助：显示本说明';
 
 export function trustedBase(value = WEIXIN_BASE) {
@@ -44,7 +44,7 @@ export class WeixinAPI {
   }
 
   async call(path, body, { signal, timeout = 15000, metadata = true } = {}) {
-    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '514' };
+    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '515' };
     if (body !== undefined) {
       Object.assign(headers, { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token',
         'X-WECHAT-UIN': Buffer.from(String(randomBytes(4).readUInt32BE())).toString('base64') });
@@ -60,7 +60,9 @@ export class WeixinAPI {
       });
     } catch (error) {
       if (error.name === 'TimeoutError' || error.name === 'AbortError' || signal?.aborted) throw error;
-      throw new Error('微信网络连接失败，请检查电脑网络。');
+      const code = error.cause?.code ?? error.code;
+      const detail = typeof code === 'string' && /^[A-Z0-9_]{1,60}$/.test(code) ? `（${code}）` : '';
+      throw new Error(`微信网络连接失败${detail}。若代理连接失败而直连正常，可运行 scripts/wechat.ps1 -WeixinDirect 保存微信直连设置。`);
     }
     if (!response.ok) throw Object.assign(new Error(`微信接口返回 HTTP ${response.status}。`), { code: response.status });
     const result = parseApiJSON(await response.text());
@@ -531,7 +533,8 @@ export class WeixinRemote {
         } catch (error) {
           if (signal.aborted) break;
           if (error.code === -14) throw error;
-          reportError(error);
+          // A long poll with no incoming messages may legitimately time out.
+          if (error.name !== 'TimeoutError') reportError(error);
           await sleep(delay, undefined, { signal });
           delay = Math.min(delay * 2, 15000);
         }

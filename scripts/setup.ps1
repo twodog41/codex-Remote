@@ -58,6 +58,7 @@ if ($old -and $old.PSObject.Properties['allowlistEnabled']) { $configData.allowl
 if ($old -and $old.PSObject.Properties['allowedProjects']) { $configData.allowedProjects = @($old.allowedProjects) }
 if ($old.desktop -and $old.project -eq $projectPath) { $configData.desktop = $old.desktop }
 if ($old.proxy) { $configData.proxy = $old.proxy }
+if ($old -and $old.PSObject.Properties['weixinDirect']) { $configData.weixinDirect = [bool]$old.weixinDirect }
 $config = $configData | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($configPath, $config, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "配置已保存：$configPath"

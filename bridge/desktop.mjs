@@ -38,7 +38,7 @@ export class DesktopBridge {
 
   async start() {
     await this.rpc.request('initialize', { protocolVersion: '2024-11-05', capabilities: {},
-      clientInfo: { name: 'remote-codex-desktop', version: '0.2.2' } });
+      clientInfo: { name: 'remote-codex-desktop', version: '0.2.3' } });
     this.rpc.write({ method: 'notifications/initialized' });
     await this.refresh();
     if (this.pollMs) this.timer = setInterval(() => {

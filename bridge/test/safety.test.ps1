@@ -13,6 +13,7 @@ try {
     if (-not $config.token.StartsWith('dpapi-current-user:')) { throw 'Setup left pairing token in plaintext.' }
     if ($config.allowlistEnabled -ne $false) { throw 'Allowlist must be disabled on first setup.' }
     $config.allowlistEnabled = $true
+    $config | Add-Member -NotePropertyName weixinDirect -NotePropertyValue $true
     [System.IO.File]::WriteAllText($configFile, ($config | ConvertTo-Json -Depth 8))
     if (($setupOutput | Out-String) -notmatch '[a-f0-9]{64}') { throw 'Explicit pairing token display failed.' }
     $repeatOutput = & (Join-Path $scripts 'setup.ps1') -Project $project -Quiet -ShowToken 6>&1
@@ -20,6 +21,7 @@ try {
     & (Join-Path $scripts 'allow-project.ps1') -Project $other
     $config = Get-Content -LiteralPath $configFile -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($config.allowlistEnabled -ne $true) { throw 'Repeated setup did not retain the allowlist switch.' }
+    if ($config.weixinDirect -ne $true) { throw 'Repeated setup did not retain the network setting.' }
     if (@($config.allowedProjects).Count -ne 2) { throw 'PC allowlist add failed.' }
     & (Join-Path $scripts 'allow-project.ps1') -Project $other -Remove
     $config = Get-Content -LiteralPath $configFile -Raw -Encoding UTF8 | ConvertFrom-Json

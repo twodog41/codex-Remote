@@ -1,5 +1,6 @@
-﻿param([string]$Project, [switch]$LoginOnly, [string]$ThreadId, [switch]$Independent)
+﻿param([string]$Project, [switch]$LoginOnly, [string]$ThreadId, [switch]$Independent, [switch]$WeixinDirect, [switch]$WeixinProxy)
 $ErrorActionPreference = 'Stop'
+if ($WeixinDirect -and $WeixinProxy) { throw 'WeixinDirect 与 WeixinProxy 不能同时使用。' }
 $configRoot = if ($env:REMOTE_CODEX_HOME) { $env:REMOTE_CODEX_HOME } else { Join-Path $env:LOCALAPPDATA 'RemoteCodex' }
 $hash = [System.Security.Cryptography.SHA256]::Create()
 try { $key = ([BitConverter]::ToString($hash.ComputeHash([System.Text.Encoding]::UTF8.GetBytes([System.IO.Path]::GetFullPath($configRoot).ToLowerInvariant())))).Replace('-', '') }
@@ -15,6 +16,18 @@ if (-not (Test-Path -LiteralPath (Join-Path $configRoot 'config.json'))) {
 }
 $configFile = Join-Path $configRoot 'config.json'
 $configData = Get-Content -LiteralPath $configFile -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($WeixinDirect -or $WeixinProxy) {
+    $configData | Add-Member -NotePropertyName weixinDirect -NotePropertyValue ([bool]$WeixinDirect) -Force
+    [System.IO.File]::WriteAllText($configFile + '.tmp', ($configData | ConvertTo-Json -Depth 6), (New-Object System.Text.UTF8Encoding($false)))
+    Move-Item -LiteralPath ($configFile + '.tmp') -Destination $configFile -Force
+}
+if ($configData.weixinDirect) {
+    $env:NO_PROXY = (@($env:NO_PROXY, 'weixin.qq.com', '.weixin.qq.com', 'wechat.com', '.wechat.com') | Where-Object { $_ }) -join ','
+    Write-Host '微信接口使用直连（已保存）；其他服务仍沿用原代理设置。'
+}
+if ($WeixinProxy) {
+    $env:NO_PROXY = (@($env:NO_PROXY -split ',') | Where-Object { $_ -and $_.Trim() -notin @('weixin.qq.com', '.weixin.qq.com', 'wechat.com', '.wechat.com') }) -join ','
+}
 if ($configData.proxy) {
     if (-not $env:HTTP_PROXY) { $env:HTTP_PROXY = $configData.proxy }
     if (-not $env:HTTPS_PROXY) { $env:HTTPS_PROXY = $configData.proxy }

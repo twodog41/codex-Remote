@@ -7,6 +7,7 @@ $originalExitCode = $global:LASTEXITCODE
 $originalRemoteHome = $env:REMOTE_CODEX_HOME
 $originalHTTPProxy = $env:HTTP_PROXY
 $originalHTTPSProxy = $env:HTTPS_PROXY
+$originalNoProxy = $env:NO_PROXY
 try {
     $fakeBundle = Join-Path $testRoot 'OpenAI\Codex\bin\test-version'
     New-Item -ItemType Directory -Path $fakeBundle -Force | Out-Null
@@ -38,6 +39,18 @@ $global:LASTEXITCODE = 0
 '@)
     & (Join-Path $PSScriptRoot '..\..\scripts\wechat.ps1') -LoginOnly
     Write-Output 'PASS: saved proxy is reused by the WeChat launcher without network or model calls.'
+    $env:NO_PROXY = 'existing.example'
+    & (Join-Path $PSScriptRoot '..\..\scripts\wechat.ps1') -LoginOnly -WeixinDirect
+    $saved = Get-Content -LiteralPath (Join-Path $env:REMOTE_CODEX_HOME 'config.json') -Raw | ConvertFrom-Json
+    if ($saved.weixinDirect -ne $true) { throw 'WeChat direct setting was not saved.' }
+    $env:NO_PROXY = 'existing.example'
+    & (Join-Path $PSScriptRoot '..\..\scripts\wechat.ps1') -LoginOnly
+    if ($env:NO_PROXY -notmatch 'existing.example' -or $env:NO_PROXY -notmatch '\.weixin.qq.com') { throw 'Saved WeChat bypass was not restored.' }
+    if ($env:HTTPS_PROXY -ne 'http://127.0.0.1:12345') { throw 'Codex proxy changed.' }
+    Write-Output 'PASS: WeChat bypass persists in a fresh environment without replacing other proxy rules.'
+    & (Join-Path $PSScriptRoot '..\..\scripts\wechat.ps1') -LoginOnly -WeixinProxy
+    $saved = Get-Content -LiteralPath (Join-Path $env:REMOTE_CODEX_HOME 'config.json') -Raw | ConvertFrom-Json
+    if ($saved.weixinDirect -ne $false -or $env:NO_PROXY -ne 'existing.example') { throw 'WeChat direct setting could not be reverted.' }
 } finally {
     $env:LOCALAPPDATA = $originalLocalAppData
     $env:CODEX_BIN = $originalCodexBin
@@ -46,6 +59,7 @@ $global:LASTEXITCODE = 0
     $env:REMOTE_CODEX_HOME = $originalRemoteHome
     $env:HTTP_PROXY = $originalHTTPProxy
     $env:HTTPS_PROXY = $originalHTTPSProxy
+    $env:NO_PROXY = $originalNoProxy
     $absoluteTestRoot = [System.IO.Path]::GetFullPath($testRoot)
     $tempPrefix = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     if (-not $absoluteTestRoot.StartsWith($tempPrefix, [System.StringComparison]::OrdinalIgnoreCase) -or

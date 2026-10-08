@@ -23,6 +23,10 @@ test('Tencent wire format, big IDs, trusted hosts, local QR and fail-closed logi
   for (const value of ['http://ilinkai.weixin.qq.com', 'https://weixin.qq.com.evil.example',
     'https://u:p@ilinkai.weixin.qq.com', 'https://ilinkai.weixin.qq.com/path']) assert.throws(() => trustedBase(value));
   assert.equal(trustedBase(), 'https://ilinkai.weixin.qq.com');
+  const brokenNetwork = new WeixinAPI({ fetcher: async () => { throw Object.assign(new Error('secret network details'),
+    { cause: { code: 'ECONNRESET', message: 'private proxy password' } }); } });
+  await assert.rejects(brokenNetwork.updates('cursor'), error => error.message.includes('ECONNRESET') &&
+    error.message.includes('WeixinDirect') && !/secret|password/.test(error.message));
   const text = '中文😀'.repeat(800);
   assert.equal(chunks(text).join(''), text);
   assert.ok(chunks(text).every(c => Buffer.byteLength(c) <= 1800));
@@ -74,7 +78,7 @@ test('Tencent wire format, big IDs, trusted hosts, local QR and fail-closed logi
     assert.equal(rawBody.msg.message_type, 2);
     assert.equal(rawBody.msg.message_state, 2);
     assert.equal(rawBody.msg.item_list[0].text_item.text, '你好');
-    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.2');
+    assert.equal(rawBody.base_info.bot_agent, 'RemoteCodex/0.2.3');
     await assert.rejects(authenticated.send('owner', '', 'text', 'id'), /上下文/);
     const expired = new WeixinAPI({ fetcher: async () => json({ ret: -14, errmsg: 'secret should never be printed' }) });
     await assert.rejects(expired.updates('cursor'), error => error.code === -14 && !error.message.includes('secret'));
