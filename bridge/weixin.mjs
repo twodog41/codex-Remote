@@ -6,14 +6,14 @@ import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { AppServer, Bridge, loadConfig } from './server.mjs';
-import { DesktopBridge } from './desktop.mjs';
 import { downloadImage, cleanImages } from './images.mjs';
 import { assertFresh, assertTarget, assertEnabled, redact, COMMAND_TTL } from './safety.mjs';
 import { readPrivateJSON, savePrivateJSON, assertStandardUser } from './vault.mjs';
 import { createDiagnostics } from './diagnostics.mjs';
+import { connectDesktop } from './connect-desktop.mjs';
 
 export const WEIXIN_BASE = 'https://ilinkai.weixin.qq.com';
-const VERSION = '0.2.4';
+const VERSION = '0.2.5';
 const HELP = '直接发送自然语言，让 Codex 在电脑上执行。\n状态：查看当前进度\n停止：停止任务\n允许 编号 / 拒绝 编号：处理授权\n回答 编号 问题ID 内容：回答问题\n完全访问：申请完整 PC 访问（需要再次确认）\n撤回完全访问：停止并恢复项目权限\n帮助：显示本说明';
 
 export function trustedBase(value = WEIXIN_BASE) {
@@ -45,7 +45,7 @@ export class WeixinAPI {
   }
 
   async call(path, body, { signal, timeout = 15000, metadata = true } = {}) {
-    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '516' };
+    const headers = { 'iLink-App-Id': 'bot', 'iLink-App-ClientVersion': '517' };
     if (body !== undefined) {
       Object.assign(headers, { 'Content-Type': 'application/json', AuthorizationType: 'ilink_bot_token',
         'X-WECHAT-UIN': Buffer.from(String(randomBytes(4).readUInt32BE())).toString('base64') });
@@ -598,9 +598,9 @@ async function main() {
     }
     const credentials = readPrivateJSON(credentialFile);
     const api = new WeixinAPI({ baseURL: credentials.baseURL, token: credentials.token });
-    bridge = config.desktop ? new DesktopBridge({ ...config.desktop, project: config.project, configFile: config.configFile, allowedProjects: config.allowedProjects, allowlistEnabled: config.allowlistEnabled })
+    bridge = config.desktop ? await connectDesktop(config)
       : new Bridge({ ...config, rpc: new AppServer(config.command, undefined, config.project) });
-    await bridge.start();
+    if (!config.desktop) await bridge.start();
     const remote = new WeixinRemote({ bridge, api, credentials, stateFile: join(root, 'weixin-state.json'), imageDirectory: join(root, 'images'), disabledFile,
       diagnostic: createDiagnostics(join(root, 'diagnostics.log')) });
     console.log('微信遥控已启动：' + bridge.snapshot().project +
